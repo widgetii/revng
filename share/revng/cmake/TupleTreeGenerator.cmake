@@ -151,15 +151,16 @@ function(tuple_tree_generator_compute_generated_cpp_files SCHEMA_PATH
     DIRECTORY
     APPEND
     PROPERTY CMAKE_CONFIGURE_DEPENDS "${SCHEMA_PATH}")
+  message("${SCRIPTS_ROOT_DIR}/tuple-tree-generate-cpp-paths.py")
   execute_process(
-    COMMAND
+    COMMAND python3
       "${SCRIPTS_ROOT_DIR}/tuple-tree-generate-cpp-paths.py" "--forward-decls"
       "--early" "--late" "${SCHEMA_PATH}" "${HEADERS_DIR}"
     COMMAND "tr" "\n" ";"
     OUTPUT_VARIABLE LOCAL_GENERATED_HEADERS_VARIABLE COMMAND_ERROR_IS_FATAL ANY)
 
   execute_process(
-    COMMAND "${SCRIPTS_ROOT_DIR}/tuple-tree-generate-cpp-paths.py" "--impl"
+    COMMAND python3 "${SCRIPTS_ROOT_DIR}/tuple-tree-generate-cpp-paths.py" "--impl"
             "${SCHEMA_PATH}" "${HEADERS_DIR}"
     COMMAND "tr" "\n" ";"
     OUTPUT_VARIABLE LOCAL_GENERATED_IMPLS_VARIABLE COMMAND_ERROR_IS_FATAL ANY)
@@ -474,6 +475,8 @@ function(target_tuple_tree_generator TARGET_ID)
     set(GEN_HEADERS_PATH
         "${CMAKE_BINARY_DIR}/include/revng/${GEN_HEADER_DIRECTORY}/Generated")
   endif()
+
+  make_directory("${GEN_HEADERS_PATH}")
 
   # Choose a target name that's available
   set(INDEX 1)

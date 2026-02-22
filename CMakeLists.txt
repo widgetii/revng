@@ -156,6 +156,7 @@ install(
 set(ADDITIONAL_BIN_PATHS "${CMAKE_BINARY_DIR}/share/revng/additional-bin-paths")
 file(WRITE "${ADDITIONAL_BIN_PATHS}" "libexec/revng\n")
 
+# WIP: drop
 file(RELATIVE_PATH RELATIVE_LLVM_TOOLS_BINARY_DIR "${CMAKE_INSTALL_PREFIX}"
      "${LLVM_TOOLS_BINARY_DIR}")
 file(APPEND "${ADDITIONAL_BIN_PATHS}" "${RELATIVE_LLVM_TOOLS_BINARY_DIR}\n")
@@ -222,7 +223,7 @@ foreach(
   # files and runs analyses that determine which CSVs are accessed by each
   # helper function.
   set(LIBTCG_HELPERS
-      "${CMAKE_INSTALL_PREFIX}/share/libtcg/libtcg-helpers-${ARCH}.bc")
+      "${LIBTCG_DIR}/share/libtcg/libtcg-helpers-${ARCH}.bc")
   set(LIBTCG_HELPERS_FULL
       "${CMAKE_BINARY_DIR}/share/revng/libtcg-helpers-full-${ARCH}.bc")
   add_custom_command(
@@ -287,7 +288,7 @@ endforeach()
 file(
   GLOB
   WELL_KNOWN_BINARIES
-  "${CMAKE_INSTALL_PREFIX}/share/revng/test/tests/well-known-models/*revng-qa.compiled-with-debug*"
+  "${TEST_REVNG_QA_DIR}/share/revng/test/tests/well-known-models/*revng-qa.compiled-with-debug*"
 )
 
 add_custom_target(well-known-binaries ALL)

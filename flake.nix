@@ -484,7 +484,7 @@
         revng = stdenv.mkDerivation {
           name = "revng";
 
-          src = ./revng;
+          src = ./.;
 
           nativeBuildInputs = with pkgs; [
             aws-sdk-cpp
@@ -496,6 +496,7 @@
             libarchive
             ninja
             nodejs
+            python3
             self.packages.${system}.revngJavascriptDependencies
             self.packages.${system}.xxx
             self.packages.${system}.llvm
@@ -506,6 +507,9 @@
           cmakeFlags = [
             "-GNinja"
             "-DLLVM_DIR=${self.packages.${system}.llvm}/lib/cmake/llvm"
+            "-DLIBTCG_DIR=${self.packages.${system}.qemuHelpers}"
+            "-DTEST_REVNG_QA_DIR=${self.packages.${system}."test/revng-qa"}"
+            "-DTARGET_CLANG=${self.packages.${system}.yyy}/bin/clang"
           ];
 
         };
