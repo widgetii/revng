@@ -30,11 +30,6 @@ function(revng_register_library NAME EXPORT_NAME)
 
   add_dependencies(revng-all-binaries "${NAME}")
   target_include_directories("${NAME}" INTERFACE $<INSTALL_INTERFACE:include/>)
-  prepend_target_property("${NAME}" BUILD_RPATH
-                          "\$ORIGIN:\$ORIGIN/revng/analyses" ":")
-  if(NOT "${CMAKE_INSTALL_RPATH}" STREQUAL "")
-    append_target_property("${NAME}" BUILD_RPATH "${CMAKE_INSTALL_RPATH}" ":")
-  endif()
 
   set_target_properties("${NAME}" PROPERTIES LIBRARY_OUTPUT_DIRECTORY
                                              "${CMAKE_BINARY_DIR}/lib")
@@ -61,10 +56,6 @@ macro(revng_add_analyses_library NAME EXPORT_NAME)
   add_library("${NAME}" SHARED ${ARGN})
   add_dependencies(revng-all-binaries "${NAME}")
   target_include_directories("${NAME}" INTERFACE $<INSTALL_INTERFACE:include/>)
-  prepend_target_property("${NAME}" BUILD_RPATH "\$ORIGIN/../../:\$ORIGIN" ":")
-  if(NOT "${CMAKE_INSTALL_RPATH}" STREQUAL "")
-    append_target_property("${NAME}" BUILD_RPATH "${CMAKE_INSTALL_RPATH}" ":")
-  endif()
 
   set_target_properties(
     "${NAME}" PROPERTIES LIBRARY_OUTPUT_DIRECTORY
@@ -101,16 +92,6 @@ macro(revng_add_executable_internal NAME TARGET_PATH)
   add_executable("${NAME}" ${ARGN})
 
   add_dependencies(revng-all-binaries "${NAME}")
-
-  # Set BUILD_RPATH
-  prepend_target_property(
-    "${NAME}"
-    BUILD_RPATH
-    "\$ORIGIN/${RELATIVE_TO_ROOT}lib/:\$ORIGIN/${RELATIVE_TO_ROOT}lib/revng/analyses/"
-    ":")
-  if(NOT "${CMAKE_INSTALL_RPATH}" STREQUAL "")
-    append_target_property("${NAME}" BUILD_RPATH "${CMAKE_INSTALL_RPATH}" ":")
-  endif()
 
   # Build in the desired directory
   set_target_properties(

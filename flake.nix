@@ -94,8 +94,8 @@
           });
 
       qemuxx =
-        stdenv: name: cflags: suffixes:
-        (stdenv.mkDerivation {
+        pkgs: llvmPackages: name: cflags: suffixes:
+        (llvmPackages.stdenv.mkDerivation {
           name = name;
 
           src = pkgs.fetchFromGitHub {
@@ -125,15 +125,23 @@
 
           nativeBuildInputs = with pkgs; [
             (python3.withPackages (python-pkgs: [ python-pkgs.distlib ]))
+            # Hooks from the python package are needed to add `$pythonPath` so
+            # `python/scripts/mkvenv.py` can detect `meson` otherwise the vendored meson without patches will be used.
+            python3Packages.python
             pkg-config
+            meson
             ninja
             coreutils-full
             zlib
-            glib
-            clang_21
-            llvm_21
+            llvmPackages.clang
+            llvmPackages.llvm
           ];
 
+          buildInputs = with pkgs; [
+            glib
+          ];
+
+          dontUseMesonConfigure = true;
           enableParallelBuilding = true;
 
           configureFlags =
@@ -265,8 +273,8 @@
           src = pkgs.fetchFromGitHub {
             owner = "revng";
             repo = "llvm-project";
-            rev = "c007a1f442ab28c0b70d1ed52297b97a28a44931";
-            sha256 = "sha256-sooFif9DcNsrWJwh6UcZh+OC7SwxyirxihWQj1WZdVk=";
+            rev = "e3667d437564e0fb1fbf6fb13d9d14ebc1023d90";
+            sha256 = "sha256-Z4o+BGgBEkwm42ZB06V8i9itf95itls3aAepyn9tlfg=";
           };
 
           nativeBuildInputs = with pkgs; [
@@ -277,6 +285,10 @@
 
           cmakeFlags = [
             "-GNinja"
+
+            "-DCMAKE_C_FLAGS=-O2"
+            "-DCMAKE_CXX_FLAGS=-O2"
+            "-DCMAKE_BUILD_TYPE=Debug"
 
             "-DCMAKE_INSTALL_BINDIR=libexec"
 
@@ -299,7 +311,7 @@
           preConfigure = "cd llvm";
 
         };
-
+        
         # Build clang to compile QEMU helpers
         clangRelease = stdenv.mkDerivation {
           name = "clang-release";
@@ -341,9 +353,9 @@
         };
 
         # Build our fork of QEMU
-        qemu = qemuxx pkgs.llvmPackages_21.stdenv "qemu" [ "-fPIC" ] [ "linux-user" "libtcg" ];
+        qemu = qemuxx pkgs pkgs.llvmPackages_21 "qemu" [ "-fPIC" ] [ "linux-user" "libtcg" ];
         qemuHelpers =
-          qemuxx pkgs-2505.llvmPackages_16.stdenv "qemu-helpers"
+          qemuxx pkgs-2505 pkgs-2505.llvmPackages_16 "qemu-helpers"
             [
               "-fPIC"
               "-Wno-gcc-compat"
@@ -444,6 +456,33 @@
 
         };
 
+        nanobind = stdenv.mkDerivation {
+          name = "nanobind";
+
+          src = pkgs.fetchFromGitHub {
+            owner = "revng";
+            repo = "nanobind";
+            fetchSubmodules = true;
+            rev = "9987280372f46974236fb5b202f6e085c4347290";
+            sha256 = "sha256-PPTKiJaJMyKJ/F+t4DLEyK7fgiafZT+WO8LoHn/zkEE=";
+          };
+
+          nativeBuildInputs = with pkgs; [
+            cmake
+            ninja
+            python3
+          ];
+
+          preConfigure = "cd standalone";
+
+          cmakeFlags = [
+            "-GNinja"
+            "-DCMAKE_CXX_STANDARD=20"
+            "-DBUILD_SHARED_LIBS=ON"
+          ];
+
+        };
+
         # Use a fake npm project to specify JavaScript dependencies
         revngJavascriptDependencies = pkgs.stdenv.mkDerivation (finalAttrs: {
           nativeBuildInputs = [
@@ -465,21 +504,6 @@
           };
         });
 
-        # "test/revng-qa" = derivation {
-        #   name = "hello-derivation";
-        #   builder = "${pkgs.runtimeShell}";
-        #   args = [ "-c" ''
-        #     export PATH="${pkgs.python3}/bin:${pkgs.coreutils}/bin:$PATH"
-        #     mkdir -p $out
-        #     (
-        #     echo "${self.packages.${system}.revng-qa}"
-        #     python3 ${self.packages.${system}.revng-qa}/libexec/revng/test-configure --help
-        #     pwd
-        #     ) &> $out/hello.txt
-        #   '' ];
-        #   system = "${system}";
-        # };
-
         # Build revng
         revng = stdenv.mkDerivation {
           name = "revng";
@@ -497,17 +521,26 @@
             ninja
             nodejs
             python3
+            zstd
             self.packages.${system}.revngJavascriptDependencies
             self.packages.${system}.xxx
             self.packages.${system}.llvm
             self.packages.${system}.qemu
+            self.packages.${system}.nanobind
             zlib
           ];
 
+          postPatch = ''patchShebangs --build .'';
+
           cmakeFlags = [
             "-GNinja"
+            "-DCMAKE_CXX_STANDARD=20"
+            "-DCMAKE_C_FLAGS=-O2"
+            "-DCMAKE_CXX_FLAGS=-O2"
+            "-DCMAKE_BUILD_TYPE=Debug"
             "-DLLVM_DIR=${self.packages.${system}.llvm}/lib/cmake/llvm"
-            "-DLIBTCG_DIR=${self.packages.${system}.qemuHelpers}"
+            "-DLIBTCG_DIR=${self.packages.${system}.qemu}"
+            "-DQEMU_HELPERS_DIR=${self.packages.${system}.qemuHelpers}"
             "-DTEST_REVNG_QA_DIR=${self.packages.${system}."test/revng-qa"}"
             "-DTARGET_CLANG=${self.packages.${system}.yyy}/bin/clang"
           ];

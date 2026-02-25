@@ -19,6 +19,7 @@ include_directories("${CMAKE_SOURCE_DIR}/include")
 include_directories("${CMAKE_BINARY_DIR}/include")
 
 add_definitions("-DINSTALL_PATH=\"${CMAKE_INSTALL_PREFIX}\"")
+add_definitions("-DLIBTCG_PATH=\"${LIBTCG_DIR}\"")
 
 # Uncomment the following line if recursive coroutines make debugging hard
 # add_definitions("-DDISABLE_RECURSIVE_COROUTINES")
@@ -59,6 +60,8 @@ add_flag_if_available("-Wno-unused-variable")
 add_flag_if_available("-Wno-maybe-uninitialized")
 add_flag_if_available("-Wno-init-list-lifetime")
 add_flag_if_available("-Wno-ambiguous-reversed-operator")
+add_flag_if_available("-Wno-alias-template-in-declaration-name")
+add_flag_if_available("-Wno-unreachable-code-break")
 
 # Add some extra warnings
 add_flag_if_available("-Wstrict-aliasing")
@@ -70,7 +73,8 @@ add_flag_if_available("-Winconsistent-missing-destructor-override")
 add_flag_if_available("-Wnewline-eof")
 add_flag_if_available("-Wmissing-prototypes")
 add_flag_if_available("-Wimplicit-fallthrough")
-
+add_flag_if_available("-Wno-missing-designated-field-initializers")
+add_flag_if_available("-Wno-unused-but-set-variable")
 add_definitions("-D_FILE_OFFSET_BITS=64")
 
 check_cxx_compiler_flag("-no-pie" COMPILER_SUPPORTS_NO_PIE)
@@ -133,7 +137,7 @@ add_custom_command(
     > "${COMPONENT_HASH_PATH}")
 add_custom_target(generate-component-hash ALL DEPENDS "${COMPONENT_HASH_PATH}")
 install(FILES "${COMPONENT_HASH_PATH}"
-        DESTINATION "${CMAKE_INSTALL_DIR}/share/revng/component-hashes/")
+        DESTINATION "share/revng/component-hashes/")
 
 #
 # share/revng
@@ -156,10 +160,7 @@ install(
 set(ADDITIONAL_BIN_PATHS "${CMAKE_BINARY_DIR}/share/revng/additional-bin-paths")
 file(WRITE "${ADDITIONAL_BIN_PATHS}" "libexec/revng\n")
 
-# WIP: drop
-file(RELATIVE_PATH RELATIVE_LLVM_TOOLS_BINARY_DIR "${CMAKE_INSTALL_PREFIX}"
-     "${LLVM_TOOLS_BINARY_DIR}")
-file(APPEND "${ADDITIONAL_BIN_PATHS}" "${RELATIVE_LLVM_TOOLS_BINARY_DIR}\n")
+file(APPEND "${ADDITIONAL_BIN_PATHS}" "${LLVM_DIR}/../../../libexec\n")
 
 # Create additional-search-prefixes
 file(WRITE "${CMAKE_BINARY_DIR}/additional-search-prefixes"
@@ -223,7 +224,7 @@ foreach(
   # files and runs analyses that determine which CSVs are accessed by each
   # helper function.
   set(LIBTCG_HELPERS
-      "${LIBTCG_DIR}/share/libtcg/libtcg-helpers-${ARCH}.bc")
+      "${QEMU_HELPERS_DIR}/share/libtcg/libtcg-helpers-${ARCH}.bc")
   set(LIBTCG_HELPERS_FULL
       "${CMAKE_BINARY_DIR}/share/revng/libtcg-helpers-full-${ARCH}.bc")
   add_custom_command(
@@ -424,6 +425,7 @@ add_custom_target(mkdocs ALL DEPENDS share/doc/revng/html/404.html)
 add_custom_command(
   OUTPUT "${CMAKE_BINARY_DIR}/share/revng/helper-list.csv"
   COMMAND
+    ${CMAKE_COMMAND} -E env "PATH=${LLVM_DIR}/../../../libexec:$ENV{PATH}"
     ${CMAKE_SOURCE_DIR}/scripts/extract-helper-names.sh ${HELPER_MODULE_LIST} >
     "${CMAKE_BINARY_DIR}/share/revng/helper-list.csv"
   DEPENDS copy_share ${HELPER_MODULE_LIST})
@@ -439,4 +441,4 @@ add_subdirectory(lib)
 add_subdirectory(python)
 add_subdirectory(tests)
 add_subdirectory(tools)
-add_subdirectory(typescript)
+#add_subdirectory(typescript)

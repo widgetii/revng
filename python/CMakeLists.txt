@@ -474,7 +474,7 @@ python_module(
 llvm_map_components_to_libnames(LLVM_LIBRARIES Support Core)
 
 set(CPP_MODULE_NAME _pipebox)
-add_library("${CPP_MODULE_NAME}" MODULE
+add_library("${CPP_MODULE_NAME}" SHARED
             "${CMAKE_SOURCE_DIR}/lib/PipeboxCommon/Python/_pipebox.cpp")
 set_target_properties(
   "${CPP_MODULE_NAME}"
