@@ -520,9 +520,9 @@
             libarchive
             ninja
             nodejs
-            python3
             zstd
             self.packages.${system}.revngJavascriptDependencies
+            makeWrapper
             self.packages.${system}.xxx
             self.packages.${system}.llvm
             self.packages.${system}.qemu
@@ -545,6 +545,13 @@
             "-DTARGET_CLANG=${self.packages.${system}.yyy}/bin/clang"
           ];
 
+          postFixup = ''
+            for PROGRAM in revng revng2 pype; do
+                wrapProgram $out/bin/"$PROGRAM" --prefix PYTHONPATH : "${self.packages.${system}.xxx}/${pkgs.python3.sitePackages}"
+            done
+          '';
+
+         
         };
 
       };

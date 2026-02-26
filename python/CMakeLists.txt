@@ -524,6 +524,17 @@ install(
   DIRECTORY "${CMAKE_BINARY_DIR}/${PYTHON_INSTALL_PATH}/revng"
   DESTINATION "${CMAKE_INSTALL_PREFIX}/${PYTHON_INSTALL_PATH}"
   USE_SOURCE_PERMISSIONS)
+
+# install(TARGETS) so CMake rewrites the RPATH at install time.
+# The install(DIRECTORY) above copies the whole revng/ tree (including this
+# .so) but does NOT fix up RPATHs.  This install(TARGETS) overwrites the
+# broken copy with one that has the correct RPATH.
+install(
+  TARGETS "${CPP_MODULE_NAME}"
+  LIBRARY
+    DESTINATION
+      "${CMAKE_INSTALL_PREFIX}/${PYTHON_INSTALL_PATH}/revng/internal")
+
 foreach(WHEEL_NAME ${PYTHON_WHEELS})
   install(
     DIRECTORY
