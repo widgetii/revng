@@ -6,6 +6,8 @@ cmake_minimum_required(VERSION 3.15.0)
 
 project(revng)
 
+set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib;${CMAKE_INSTALL_PREFIX}/lib/revng/analyses")
+
 include(share/revng/cmake/Common.cmake)
 
 find_program(CLANG_PATH NAMES clang)

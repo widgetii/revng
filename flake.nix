@@ -38,9 +38,42 @@
     }:
     let
       system = "x86_64-linux";
-
-      pkgs = import nixpkgs { inherit system; };
-      pkgs-2505 = import nixpkgs-2505 { inherit system; };
+      ccacheOverlay = (
+        self: super: {
+          ccacheWrapper = super.ccacheWrapper.override {
+            extraConfig = ''
+              export CCACHE_COMPRESS=1
+              export CCACHE_SLOPPINESS=random_seed
+              export CCACHE_DIR="/nix/var/cache/ccache"
+              export CCACHE_UMASK=007
+              if [ ! -d "$CCACHE_DIR" ]; then
+                echo "====="
+                echo "Directory '$CCACHE_DIR' does not exist"
+                echo "Please create it with:"
+                echo "  sudo mkdir -m0770 '$CCACHE_DIR'"
+                echo "  sudo chown root:nixbld '$CCACHE_DIR'"
+                echo "====="
+                exit 1
+              fi
+              if [ ! -w "$CCACHE_DIR" ]; then
+                echo "====="
+                echo "Directory '$CCACHE_DIR' is not accessible for user $(whoami)"
+                echo "Please verify its access permissions"
+                echo "====="
+                exit 1
+              fi
+            '';
+          };
+        }
+      );
+      pkgs = import nixpkgs {
+        inherit system;
+        overlays = [ ccacheOverlay ];
+      };
+      pkgs-2505 = import nixpkgs-2505 {
+        inherit system;
+        overlays = [ ccacheOverlay ];
+      };
 
       # Adopt:
       #
@@ -48,6 +81,15 @@
       # * libc++ as C++ standard library
       # * mold as linker
       stdenv = (pkgs.useMoldLinker pkgs.llvmPackages_21.libcxxStdenv);
+      ccacheStdenv = pkgs.ccacheStdenv.override {
+        stdenv = stdenv;
+        extraConfig = ''
+          export CCACHE_DIR="''${CCACHE_DIR:-/nix/var/cache/ccache}"
+          export CCACHE_COMPRESS=1
+          export CCACHE_SLOPPINESS=random_seed
+          export CCACHE_UMASK=007
+        '';
+      };
 
       #
       # Build C++ dependencies using our stdenv
@@ -93,7 +135,7 @@
             ];
           });
 
-      qemuxx =
+      makeQemu =
         pkgs: llvmPackages: name: cflags: suffixes:
         (llvmPackages.stdenv.mkDerivation {
           name = name;
@@ -194,9 +236,9 @@
     in
     {
       packages.${system} = {
-        yyy = pkgs-2505.clang_16;
+        revngClang = pkgs-2505.clang_16;
 
-        xxx =
+        revngPythonDependencies =
           let
             python = pkgs.python3;
             workspace = uv2nix.lib.workspace.loadWorkspace {
@@ -262,12 +304,12 @@
                 })
               ]
             );
-            venv = pythonSet.mkVirtualEnv "hello-world-env" workspace.deps.default;
+            venv = pythonSet.mkVirtualEnv "revng-python-dependencies" workspace.deps.default;
           in
           venv;
 
         # Build our LLVM fork
-        llvm = stdenv.mkDerivation {
+        llvm = ccacheStdenv.mkDerivation {
           name = "llvm";
 
           src = pkgs.fetchFromGitHub {
@@ -280,6 +322,8 @@
           nativeBuildInputs = with pkgs; [
             cmake
             ninja
+            zlib
+            libedit
             python3
           ];
 
@@ -311,7 +355,7 @@
           preConfigure = "cd llvm";
 
         };
-        
+
         # Build clang to compile QEMU helpers
         clangRelease = stdenv.mkDerivation {
           name = "clang-release";
@@ -353,9 +397,9 @@
         };
 
         # Build our fork of QEMU
-        qemu = qemuxx pkgs pkgs.llvmPackages_21 "qemu" [ "-fPIC" ] [ "linux-user" "libtcg" ];
+        qemu = makeQemu pkgs pkgs.llvmPackages_21 "qemu" [ "-fPIC" ] [ "linux-user" "libtcg" ];
         qemuHelpers =
-          qemuxx pkgs-2505 pkgs-2505.llvmPackages_16 "qemu-helpers"
+          makeQemu pkgs-2505 pkgs-2505.llvmPackages_16 "qemu-helpers"
             [
               "-fPIC"
               "-Wno-gcc-compat"
@@ -398,16 +442,19 @@
           unpackPhase = "true";
 
           nativeBuildInputs =
-            with pkgs; 
-            ([
-            gcc
-            binutils
-            llvm_21
-            lld_21
-            ]++(import ./crossShell.nix) {
-              inherit nixpkgs;
-              inherit system;
-            })
+            with pkgs;
+            (
+              [
+                gcc
+                binutils
+                llvm_21
+                lld_21
+              ]
+              ++ (import ./crossShell.nix) {
+                inherit nixpkgs;
+                inherit system;
+              }
+            )
             ++ ((import ./msvc.nix) { pkgs = pkgs; })
             ++ [
               self.packages.${system}.revng-qa
@@ -423,7 +470,7 @@
             ];
 
           buildPhase = ''
-          echo
+            echo
           '';
 
           installPhase = ''
@@ -511,6 +558,8 @@
           src = ./.;
 
           nativeBuildInputs = with pkgs; [
+            self.packages.${system}.revngPythonDependencies
+            clang-tools
             aws-sdk-cpp
             boost-test
             cmake
@@ -523,7 +572,6 @@
             zstd
             self.packages.${system}.revngJavascriptDependencies
             makeWrapper
-            self.packages.${system}.xxx
             self.packages.${system}.llvm
             self.packages.${system}.qemu
             self.packages.${system}.nanobind
@@ -542,16 +590,69 @@
             "-DLIBTCG_DIR=${self.packages.${system}.qemu}"
             "-DQEMU_HELPERS_DIR=${self.packages.${system}.qemuHelpers}"
             "-DTEST_REVNG_QA_DIR=${self.packages.${system}."test/revng-qa"}"
-            "-DTARGET_CLANG=${self.packages.${system}.yyy}/bin/clang"
+            "-DTARGET_CLANG=${self.packages.${system}.revngClang}/bin/clang"
           ];
+
+          doCheck = true;
+
+          checkPhase = ''
+            export PATH="${self.packages.${system}.llvm}/libexec:$PATH"
+            ctest -j$(nproc)
+          '';
 
           postFixup = ''
             for PROGRAM in revng revng2 pype; do
-                wrapProgram $out/bin/"$PROGRAM" --prefix PYTHONPATH : "${self.packages.${system}.xxx}/${pkgs.python3.sitePackages}"
+                wrapProgram $out/bin/"$PROGRAM" --prefix PYTHONPATH : "${
+                  self.packages.${system}.revngPythonDependencies
+                }/${pkgs.python3.sitePackages}"
             done
           '';
 
-         
+        };
+
+        "test/revng" = stdenv.mkDerivation {
+          name = "test/revng";
+
+          unpackPhase = "true";
+
+          nativeBuildInputs = with pkgs; [
+            gcc
+            binutils
+            llvm_21
+            lld_21
+            self.packages.${system}.revng
+            ninja
+            (python312.withPackages (
+              ps: with ps; [
+                jinja2
+                pyyaml
+              ]
+            ))
+          ];
+
+          buildPhase = ''
+            echo
+          '';
+
+          installPhase = ''
+            mkdir -p $out
+            python3 \
+              ${self.packages.${system}.revng-qa}/libexec/revng/test-configure \
+              "${self.packages.${system}.revng-qa}/share/revng/test/configuration/revng-qa/"*.yml \
+              "${self.packages.${system}.revng}/share/revng/test/configuration/revng/"*.yml \
+              --install-path "${self.packages.${system}.revng}" \
+              --destination . \
+              --target-type 'revng\..*'
+            export REVNG_OPTIONS="--debug-log=verify"
+            grep -v 'shell =' build.ninja > build2.ninja
+            mv build2.ninja build.ninja
+            ln -s `command -v bash` sh
+            export XDG_CACHE_HOME="$PWD/.cache"
+            mkdir -p "$XDG_CACHE_HOME/.cache"
+
+            ninja -v -k0 all
+          '';
+
         };
 
       };
